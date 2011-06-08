@@ -431,18 +431,7 @@ class Phonepatch:
 			if play_radio:
 				try: self.radio.send_audio(data[:self.buffer_size], self.ctcss_tx)
 				except: self.debug("play: radio send_audio error"); written=None; break
-			if play_asterisk:
-				if not self.flush_asterisk(False):
-					if not play_radio: written=None; break
-					play_asterisk = flush_asterisk = False
-				try: self.secure_os(self.asterisk_in.write, data[:self.buffer_size]); self.secure_os(self.asterisk_in.flush)
-				except: self.debug("play: asterisk write error"); written=None; break
-			elif flush_asterisk: self.flush_asterisk()
 			
-			data = data[self.buffer_size:]
-			written += self.buffer_size
-			if max_time and written >= max_data:
-				break
 		
 		# Soundcards have internal buffer, make sure they are empty
 		try: self.radio.flush_audio()
@@ -454,20 +443,6 @@ class Phonepatch:
 			
 		return written
 		
-	###################################
-	def flush_asterisk(self, write=True):
-		try: 
-			retsel = select.select([self.asterisk_out], [], [], 0.1)[0]
-			if self.asterisk_out not in retsel: return False
-			buffer = self.secure_os(os.read, self.asterisk_out.fileno(), self.buffer_size)
-			if not buffer: return False
-			if write:
-				buffer = "\x00" * len(buffer)
-				self.secure_os(self.asterisk_in.write, buffer)
-				self.secure_os(self.asterisk_in.flush)
-			return True
-		except: 	return False
-	
 	###################################
 	def draw_power(self, data):
 		import audioop
@@ -489,92 +464,6 @@ class Phonepatch:
 		try: ctcss_freq = float(ctcss_freq)
 		except: self.debug("get_ctcss: invalid CTCSS frequency: %s" %(str(ctcss_id))); return
 		return ctcss_freq
-
-	###########################
-	def empty_asterisk(self, t):
-		timeout = time.time() + t
-		while time.time() < timeout:
-			retsel = select.select([self.asterisk_out], [], [], 0.0)
-			if self.asterisk_out in retsel[0]:
-				data = self.secure_os(os.read, self.asterisk_out.fileno(), self.buffer_size)
-				if not data: break
-
-	#########################################
-	def audio_loop(self):
-		"""Main loop for Asterisk<-> Radio interface"""
-		
-		if self.getconf("call_limit"): 
-			time_limit = time.time() + self.getconf("call_limit")
-		else: time_limit = None
-		self.debug("audio_loop: soundcard device: %s)" %self.getconf("soundcard_device"))		
-		if self.getconf("hangup_button"):
-			self.debug("audio_loop: hangup button: %s" %self.getconf("hangup_button"))
-		break_reason = None
-		asterisk_timeout = 2.0
-		asterisk_time = time.time() + asterisk_timeout
-		self.radio.reopen_soundcard()
-		self.audio_fd = self.radio.get_audiofd()
-		input_fds = [self.asterisk_out, self.audio_fd]
-		self.empty_asterisk(0.1)
-		self.maxocount = 2*self.radio.get_fragmentsize()
-		self.debug("audio_loop: start")
-		while 1:
-			try: retsel = select.select(input_fds, [], [])
-			except: self.debug("audio_loop: select error"); break
-			if not retsel: self.debug("audio_loop: select returned nothing"); break
-			now = time.time()
-			if asterisk_time and now > asterisk_time:
-				self.debug("audio_loop: asterisk inactivity")
-				break_reason = "asterisk"
-				break
-			
-			if self.asterisk_out in retsel[0]:
-				# Asterisk -> Radio (with VOX processing)
-				asterisk_time = now + asterisk_timeout
-				try: data = self.secure_os(os.read, self.asterisk_out.fileno(), self.buffer_size)
-				except: data = None
-				if not data: self.debug("audio_loop: asterisk closed its read descriptor"); break_reason = "asterisk"; break
-				data = self.set_gain(data, self.getconf("radio_audio_gain"))
-				# If output buffer is growing, skip the buffer
-				count = (self.audio_fd.obufcount() - self.maxocount) & (~1)
-				if count <= 0:
-					self.radio.vox_toradio(data, self.ctcss_tx)
-				else: self.debug("audio_loop: skip buffer")
-					
-			if self.audio_fd in retsel[0]:
-				# Radio -> Asterisk
-				
-				try: data = self.radio.read_audio(self.buffer_size, self.getconf("radio_audio_limit"))
-				except: data = None
-				if not data: self.debug("audio_loop: soundcard closed its descriptor"); break_reason = "radio"; break
-				data = self.set_gain(data, self.getconf("telephony_audio_gain"))
-				try: self.radio.vox_topeer(self.asterisk_in, data)
-				except: self.debug("audio_loop: asterisk closed its writing descriptor"); break_reason = "asterisk"; break
-
-				# If hangup_button is configured, hangup line when received
-				if self.getconf("hangup_button"):
-					keys = self.dtmf_decoder.decode_buffer(data)
-					if keys: self.debug("audio_loop: DTMF keys received: %s" %("".join(keys)))
-					if self.getconf("hangup_button") in keys:
-						self.debug("audio_loop: hangup DTMF button received")
-						break_reason = "user"
-						break
-			
-			# If time_limit defined, close interface at that time
-			if time_limit and time.time() >= time_limit:
-				self.debug("audio_loop: call time-limit reached: %0.2f seconds" %self.getconf("call_limit"))
-				break_reason = "timeout"
-				break
-		
-		end_audio = self.getconf("end_audio")
-		if break_reason == "asterisk":
-			self.play(True, False, end_audio, flush_asterisk=False)
-		elif break_reason == "timeout":
-			self.play(True, True, end_audio)
-		elif break_reason == "user":
-			self.play(True, True, end_audio)
-
-		self.debug("audio_loop: end audio loop")
 
 	###################################
 	def delete_pidfile(self):
@@ -653,15 +542,14 @@ class Phonepatch:
 		fd.close()
 		self.pidfile_created = True
 		
-		ids = self.get_asterisk_id()
-		os.chown(self.pidfile, *ids)
+		#os.chown(self.pidfile, *ids)
 		self.control = unixsocket.UnixSocketServer(self.controlfile, reuse=True)
 		self.control.set_handler(self.control_handler)
 		self.control_enabled = True
 		self.control_thread = threading.Thread(target=self.control.serve_forever)
 		self.control_thread.setDaemon(True)
 		self.control_thread.start()
-		os.chown(self.controlfile, *ids)
+		#os.chown(self.controlfile, *ids)
 
 	###################################
 	def read_pidfile(self):
@@ -752,110 +640,16 @@ class Phonepatch:
 
 	###################################
 	def process_number(self, number):
-		# In CTCSS mode phonepatch extension is already set
-		if self.phonepatch_extension:
-			self.asterisk_extension = self.getconf("outcall_extension").replace("%x", self.phonepatch_extension)
-			return number
 		# DTMF mode
-		if not self.getconf("outcall_dtmf_extension_mode"):
-			self.asterisk_extension = self.getconf("outcall_extension")
-			return number	
-		for phpext in self.phonepatch_extensions:				
-			mode = self.getconf("outcall_askfortone_mode", phpext)
-			dtmfid = self.getconf("outcall_dtmf_id", phpext).replace("%x", phpext)
-			if mode == "dtmf" and dtmfid: 
-				if number[:len(dtmfid)] == dtmfid:
-					self.debug("process_number: phonepatch prefix match extension: %s" %phpext)
-					mode = self.getconf("outcall_askfortone_mode", phpext)
-					self.phonepatch_extension = phpext
-					number = number[len(dtmfid):]
-					self.asterisk_extension = self.getconf("outcall_extension").replace("%x", phpext)
-					break
-		else: 
-			self.debug("process_number: outcall_dtmf_extension_mode enabled and no outcall_dtmf_id prefix matched: %s" %number)
-			return
 		return number
 			
 	###################################
-	def check_asterisk_active(self):
-		try: rv = os.system("ps -C asterisk &>/dev/null") >> 8
-		except: return False
-		return (rv == 0)
-		
-	###################################
 	def make_call(self, number):
-		"""Use outgoing calls Asterisk facility to call number"""
-		if not self.check_asterisk_active():
-			self.play(True, False, self.getconf("asterisk_inactive_audio"))
-			self.debug("make_call: asterisk not active")
-			return True
-
-		number = self.process_number(str(number))
-		if not number: 
-			self.debug("make_call: process_number() not succesful")
-			return
-		if not self.getconf("outcall"):
-			self.debug("make_call: outcalls disabled for extension: %s" %self.phonepatch_extension)
-			return
-		self.debug("make_call: asterisk extension = %s" %self.asterisk_extension)
-		check_script = self.getconf("outcall_check_script")
-		if check_script:
-			check_script = check_script.replace("%x", self.asterisk_extension)
-			self.debug("make_call: executing check_script: %s" %check_script)
-			rv, output = run_command(check_script)
-			self.debug("make_call: check_script returned code: %d" %rv)
-			if rv: self.play(True, False, self.getconf("outcall_check_audio")); return True
-		callerid = self.getconf("callerid")
-		if not callerid:
-			callerid = "%s <%s>" %(self.getconf("username"), self.phonepatch_extension)
-		self.debug("make_call: phonepatch: %s (%s) - number: %s" %(self.phonepatch_extension, self.asterisk_extension, number))
-		channel = self.getconf("outcall_channel").replace("%x", number)		
-		account = OUTCALL_IDNAME
-		
-		options = [("Channel", channel), ("MaxRetries", "0"), \
-			("RetryTime", "60"), ("Context", self.getconf("outcall_context")), \
-			("Extension", self.asterisk_extension), ("WaitTime", self.getconf("outcall_timeout")), \
-			("Priority", self.getconf("outcall_priority")), ("Account", account), ("CallerID", callerid)]
 				
-		self.accept_agicalls = True
-		# Create a temporal file to write outgoing call options
-		tempfd, callpath = tempfile.mkstemp()
-
-		for key, value in options:
-			data = "%s: %s" %(key, value)
-			os.write(tempfd, data + "\n")
-			self.debug("make_call: outcall - %s" %data)
-		os.close(tempfd)
-		
-		# Spool call file must be owned by Asterisk
-		gid, uid = self.get_asterisk_id()
-		os.chown(callpath, uid, gid)
-		
 		# Now make the outcall and wait for asterisk response
 		self.debug("make_call: start")
-		callspool = os.path.join(self.outcalls_dir, os.path.basename(callpath))
-		os.rename(callpath, callspool)
-		
-		# Save outcall spool file name on class object, as callback continue_outcall() uses it
-		self.outcallfile = os.path.join(self.outcalls_dir, os.path.basename(callpath))
-		
-		# TODO: fullduplex
-		while 1:
-			if not self.continue_outcall(): break
-			if self.play(True, False, self.getconf("ring_audio"), max_time=self.getconf("ring_audio_time"), \
-				test_function=self.continue_outcall) == None: break
-			etime = time.time() + self.getconf("ring_audio_wait")
-			
-			while time.time() < etime and self.continue_outcall():
-				time.sleep(0.1)
-				
-		self.accept_agicalls = False
-		if not self.call_active:
-			self.debug("make_call: Asterisk was unable to connect")
-			return
-		
-		self.debug("make_call: Phonepatch AGI launched")
-		self.sleep_daemon()
+		number = "@" + number
+	        self.play(True, False, number)
 		return True
 		
 	###################################
@@ -887,10 +681,6 @@ class Phonepatch:
 		return pid
 
 	###################################
-	def get_asterisk_id(self):
-		return pwd.getpwnam("asterisk")[2:4]
-
-	###################################
 	def init_daemon(self):
 		if self.background: 
 			syslog.openlog("phonepatch", syslog.LOG_PID, syslog.LOG_DAEMON)
@@ -902,11 +692,7 @@ class Phonepatch:
 		# Init flag variables (pause and continue) and set signals
 		self.set_signals([signal.SIGTERM, signal.SIGINT])
 
-		gid, uid = self.get_asterisk_id()
 		asterisk_groups = [x[2] for x in grp.getgrall() if "asterisk" in x[3]]
-		os.setgroups([gid] + asterisk_groups)
-		os.setregid(uid, uid)
-		os.setreuid(gid, gid)
 		self.create_pidfile()
 		
 	###################################
@@ -981,12 +767,8 @@ class Phonepatch:
 			
 			# AskForTone DTMF button received, now record the number
 			# TODO: Fullduplex
-			if not self.check_asterisk_active():
-				self.play(True, False, self.getconf("asterisk_inactive_audio"))
-				continue
-	 		self.play(True, False, "@KJ5HY A P R S T T.  Begin Your Message")
+	 		self.play(True, False, "@KJ5HY Touch Tone")
 			#self.play(True, False, self.getconf("tone_audio"), max_time=self.getconf("tone_audio_time"), loop=True)
-			#self.play(True, False, self.getconf("tone_audio"), max_time=3, loop=False)
 			
 			self.debug("loop_daemon: waiting for number and outcall_button")
 			timeout_time = time.time() + self.getconf("tone_timeout")
@@ -1010,7 +792,6 @@ class Phonepatch:
 					self.debug("loop_daemon: clear_button received, restart dial process")
 					continue
 				if self.getconf("outcall_button") in dtmf_keys: 
-					self.accept_agicalls = False
 					dtmf_keys = dtmf_keys[:dtmf_keys.index(self.getconf("outcall_button"))]
 					if not dtmf_keys: self.debug("loop_daemon: number void"); continue
 					# We have a number (in a list) to call to, convert to string
@@ -1019,10 +800,9 @@ class Phonepatch:
 					if noisy_button and noisy_button != "off":
 						number = self.process_noisy_number(number, noisy_button)
 					self.debug("loop_daemon: outcall_button received, making a call to %s" %number)
-					if not self.make_call(number):
+					if not self.make_call(str(number)):
 						self.play(True, False, self.getconf("ring_timeout_audio"))
 					dtmf_keys = []
-					self.accept_agicalls = True
 					break
 		self.accept_agicalls = False
 
