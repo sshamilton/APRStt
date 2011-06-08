@@ -637,10 +637,41 @@ class Phonepatch:
 	def continue_outcall(self):
 		"""Callback function to test if an outcall is still active"""
 		return (os.path.exists(self.outcallfile) and not self.call_active)
+	###################################
+	def dtmf_replace(self, pair):
+		d = {}
+		d["2A"] = "A"
+		d["2B"] = "B"
+		d["2C"] = "C"
+		d["3A"] = "D"
+		d["3B"] = "E"
+		d["3C"] = "F"
+		d["4A"] = "G"
+		d["4B"] = "H"
+		d["4C"] = "I"
+		d["5A"] = "J"
+		d["5B"] = "K"
+		d["5C"] = "L"
+		d["6A"] = "M"
+		d["6B"] = "N"
+		d["6C"] = "O"
+		d["7A"] = "P"
+		d["7B"] = "Q"
+		d["7C"] = "R"
+		d["7D"] = "S"
+		d["8A"] = "T"
+		d["8B"] = "U"
+		d["8C"] = "V"
+		d["9A"] = "W"
+		d["9B"] = "X"
+		d["9C"] = "Y"
+		d["9D"] = "Z"
+		return d[pair]
 
 	###################################
 	def process_number(self, number):
 		# DTMF mode
+		#Loop through pairs and if repeating digit, return digit, otherwise translate.
 		return number
 			
 	###################################
