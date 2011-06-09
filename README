@@ -1,0 +1,31 @@
+APRStt: APRS Touch Tone server
+
+Background:  There have been numerous attempts at APRStt, one of which has been made available to the public, but runs in DOS.  Yes that is the first one, created by Bob Bruninga himself. 
+To quote him:
+
+There have been several false starts:
+
+1) My original APRStt in dos (never intended for prime time, because no one would use DOS anymore.  And it required an external DTMF decode chip.
+
+2) One by a guy in Alabama not heard since
+3) Doug Quagliana with a windows version that used sound card decode and voice synthesis.  Demonstrated at Dayton more than a year ago, but not at all ready for prime time, and nothing done since
+
+4) BYONICS with an addon daughter board to the Tinty-Track-4.  But he is too busy with other projects.  Never finished a prototype.
+
+
+So, I'm hoping to create one that doesn't make the false start list, but is one that can continue to be developed.  The current beta version is for linux, but a plan to port it to Windows is in the works.
+
+I first have to give special thanks to Arnau Sanchez, who developed the Asterisk Phonepatch, which is the basis for the DTMF Decoding and radio control for this program.  
+
+
+Currently the project performs the task of decoding DTMF, and responding by voice using festival what the DTMF tones decoded were.  A * requests the translation, then a star finishes the sequence so it can tell you what it heard.  
+
+NOTE:  At this time, this is only proof-of-concept!  There is no APRS functionality yet, but it is coming very soon.  I had to make sure the pieces were in order before coding the APRS part.  
+
+I'm currently working on the translation portion for DTMF -> alphabet using the two-key method.  The next step is to build the APRS packet, and then send it to the APRS-IS.  Eventually it will also have to be able to send it out through another com port to a TNC, so that the APRStt doesn't have to be connected to the internet (mobile APRStt station, etc).
+
+Feel free to join the project if you are interested!
+
+Stephen
+
+
