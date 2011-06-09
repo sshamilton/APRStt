@@ -666,13 +666,36 @@ class Phonepatch:
 		d["9B"] = "X"
 		d["9C"] = "Y"
 		d["9D"] = "Z"
+		#return d[pair]
 		return d[pair]
 
 	###################################
 	def process_number(self, number):
+		def is_number(s):
+		    try:
+		        int(s)
+		        return True
+		    except ValueError:
+	        	return False
+
 		# DTMF mode
 		#Loop through pairs and if repeating digit, return digit, otherwise translate.
-		return number
+		translated_number = ""
+		if number[0] == "A": #This is a callsign, so decode it.
+			pairstart = True
+			for p in range(1,(len(number) - 3)):
+				nextchar = number[p+1]
+				if ( is_number(number[p]) and not is_number(nextchar)): #Valid number letter pair
+					newpair = number[p] + nextchar
+					self.debug(newpair)
+					translated_number = translated_number + self.dtmf_replace(newpair)
+				elif (is_number(number[p]) and is_number(nextchar)): #valid number.
+					translated_number = translated_number + number[p] #this is for the callsign number
+				else:
+					self.debug("Mid Pair!")	
+
+		#self.debug(number.length)
+		return translated_number
 			
 	###################################
 	def make_call(self, number):
@@ -798,7 +821,7 @@ class Phonepatch:
 			
 			# AskForTone DTMF button received, now record the number
 			# TODO: Fullduplex
-	 		self.play(True, False, "@KJ5HY Touch Tone")
+	 		self.play(True, False, "@A P R S Touch Tone")
 			#self.play(True, False, self.getconf("tone_audio"), max_time=self.getconf("tone_audio_time"), loop=True)
 			
 			self.debug("loop_daemon: waiting for number and outcall_button")
@@ -831,7 +854,7 @@ class Phonepatch:
 					if noisy_button and noisy_button != "off":
 						number = self.process_noisy_number(number, noisy_button)
 					self.debug("loop_daemon: outcall_button received, making a call to %s" %number)
-					if not self.make_call(str(number)):
+					if not self.make_call(self.process_number(number)):
 						self.play(True, False, self.getconf("ring_timeout_audio"))
 					dtmf_keys = []
 					break
