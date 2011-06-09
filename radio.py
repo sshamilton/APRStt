@@ -65,7 +65,7 @@ class Radio:
 		self.fullduplex = fullduplex
 		
 		# Soundcard parameters
-		self.sampleformat = "U8"
+		self.sampleformat = "S16_LE"
 		self.audio_channels = 1
 		self.buffer_size = 1024
 		self.sample_width = 2
