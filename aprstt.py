@@ -670,17 +670,46 @@ class Phonepatch:
 		return d[pair]
 
 	###################################
+	def verify_checksum(self, number):
+		self.debug("Verifying Checksum: ")
+	
+		checksum = number[len(number)-1]
+		self.debug(checksum)
+		self.debug("Calculated Checksum")
+		for p in range(1, (len(number) - 3)):
+			verify = 0
+			c = number[p]
+			if c == "A":
+				verify = verify + 1
+			elif c == "B":
+				verify = verify + 2
+			elif c == "C":
+				verify = verify + 3
+			elif c == "D":
+				verify = verify + 4
+			else:
+				verify = verify + int(number[p])
+		self.debug(verify)			
+		if str(verify)[len(str(verify))-1]  == checksum:
+			self.debug("Checksum Verified!")
+			return True
+		else: 
+			self.debug("Checksum Failed")
+			return False
+
+	###################################
 	def process_number(self, number):
 		def is_number(s):
-		    try:
-		        int(s)
-		        return True
-		    except ValueError:
-	        	return False
+			try:
+				int(s)
+				return True
+			except ValueError:
+				return False
 
 		# DTMF mode
 		#Loop through pairs and if repeating digit, return digit, otherwise translate.
 		translated_number = ""
+		symbol = number[len(number)-3]
 		if number[0] == "A": #This is a callsign, so decode it.
 			pairstart = True
 			for p in range(1,(len(number) - 3)):
@@ -692,10 +721,11 @@ class Phonepatch:
 				elif (is_number(number[p]) and is_number(nextchar)): #valid number.
 					translated_number = translated_number + number[p] #this is for the callsign number
 				else:
-					self.debug("Mid Pair!")	
-
+					self.debug("Mid Pair!")
+			return translated_number	
+		else:
+			return null
 		#self.debug(number.length)
-		return translated_number
 			
 	###################################
 	def make_call(self, number):
@@ -778,6 +808,9 @@ class Phonepatch:
 		if not mode: self.debug("loop_daemon: outcall_askfortone_mode not defined"); return
 		self.accept_agicalls = True
 		while 1:
+			#testc = "A5B5A54B9C13#"
+			#self.verify_checksum(testc)
+			
 			self.phonepatch_extension = None
 			self.radio.set_ptt(False)
 			if mode == "dtmf": self.debug("loop_daemon: waiting askfortone DTMF button: %s" %button)
@@ -854,9 +887,12 @@ class Phonepatch:
 					if noisy_button and noisy_button != "off":
 						number = self.process_noisy_number(number, noisy_button)
 					self.debug("loop_daemon: outcall_button received, making a call to %s" %number)
-					if not self.make_call(self.process_number(number)):
-						self.play(True, False, self.getconf("ring_timeout_audio"))
-					dtmf_keys = []
+					if self.verify_checksum(number):
+						if not self.make_call(self.process_number(number)):
+							self.play(True, False, self.getconf("ring_timeout_audio"))
+						dtmf_keys = []
+					else:
+						self.play(True, False, "@Error, please try again")	
 					break
 		self.accept_agicalls = False
 
