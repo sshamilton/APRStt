@@ -31,6 +31,7 @@ import templateparser, dtmf, radio
 import radiocontrol
 import unixsocket
 import daemonize
+import aprs 
 
 __version__ = "$Revision: 1.14 $"
 __author__ = "Arnau Sanchez <arnau@ehas.org>"
@@ -671,30 +672,27 @@ class Phonepatch:
 
 	###################################
 	def verify_checksum(self, number):
-		self.debug("Verifying Checksum: ")
-	
+		verify = 0	
 		checksum = number[len(number)-1]
-		self.debug(checksum)
-		self.debug("Calculated Checksum")
-		for p in range(1, (len(number) - 3)):
-			verify = 0
+		for p in range(1, (len(number) - 1)):
 			c = number[p]
 			if c == "A":
-				verify = verify + 1
+				verify = verify + 0 
 			elif c == "B":
-				verify = verify + 2
+				verify = verify + 1
 			elif c == "C":
-				verify = verify + 3
+				verify = verify + 2
 			elif c == "D":
-				verify = verify + 4
+				verify = verify + 3
 			else:
 				verify = verify + int(number[p])
-		self.debug(verify)			
 		if str(verify)[len(str(verify))-1]  == checksum:
 			self.debug("Checksum Verified!")
 			return True
 		else: 
 			self.debug("Checksum Failed")
+			self.debug("Expected " + checksum)
+			self.debug("Calculated " + str(verify)[len(str(verify))-1])
 			return False
 
 	###################################
@@ -709,7 +707,6 @@ class Phonepatch:
 		# DTMF mode
 		#Loop through pairs and if repeating digit, return digit, otherwise translate.
 		translated_number = ""
-		symbol = number[len(number)-3]
 		if number[0] == "A": #This is a callsign, so decode it.
 			pairstart = True
 			for p in range(1,(len(number) - 3)):
@@ -728,12 +725,14 @@ class Phonepatch:
 		#self.debug(number.length)
 			
 	###################################
-	def make_call(self, number):
+	def make_call(self, callsign, symbol):
 				
 		# Now make the outcall and wait for asterisk response
 		self.debug("make_call: start")
-		number = "@" + number
-	        self.play(True, False, number)
+		#number = "@" + number
+	        self.play(True, False,"@"+ callsign)
+		self.aprs = aprs.Aprs()
+                self.aprs.send_packet(callsign,symbol, 1)
 		return True
 		
 	###################################
@@ -808,14 +807,11 @@ class Phonepatch:
 		if not mode: self.debug("loop_daemon: outcall_askfortone_mode not defined"); return
 		self.accept_agicalls = True
 		while 1:
-			#testc = "A5B5A54B9C13#"
-			#self.verify_checksum(testc)
-			
-			self.phonepatch_extension = None
 			self.radio.set_ptt(False)
 			if mode == "dtmf": self.debug("loop_daemon: waiting askfortone DTMF button: %s" %button)
 			if self.ctcss_decoder: self.debug("loop_daemon: CTCSS decoding enabled")
 			self.radio.clear_ctcss()
+			
 			# CTCSS decoding always done (as it can be enabled inside an extension)
 			# DTMF decoding only if asked globally
 			while 1:
@@ -852,15 +848,11 @@ class Phonepatch:
 
 			self.set_ctcss_tx()
 			
-			# AskForTone DTMF button received, now record the number
-			# TODO: Fullduplex
 	 		self.play(True, False, "@A P R S Touch Tone")
-			#self.play(True, False, self.getconf("tone_audio"), max_time=self.getconf("tone_audio_time"), loop=True)
 			
 			self.debug("loop_daemon: waiting for number and outcall_button")
 			timeout_time = time.time() + self.getconf("tone_timeout")
 			dtmf_keys = []
-		
 			while 1:
 				now = time.time()
 				if now >= timeout_time:
@@ -888,11 +880,13 @@ class Phonepatch:
 						number = self.process_noisy_number(number, noisy_button)
 					self.debug("loop_daemon: outcall_button received, making a call to %s" %number)
 					if self.verify_checksum(number):
-						if not self.make_call(self.process_number(number)):
+						symbol = number[len(number)-2]
+						if not self.make_call(self.process_number(number), symbol):
 							self.play(True, False, self.getconf("ring_timeout_audio"))
 						dtmf_keys = []
 					else:
-						self.play(True, False, "@Error, please try again")	
+						time.sleep(0.1)
+						self.play(True, False, "@Error in checksum. Please try again")	
 					break
 		self.accept_agicalls = False
 
@@ -931,6 +925,8 @@ class Phonepatch:
 			self.delete_pidfile()
 			sys.exit(0)
 
+		#self.aprs = aprs.Aprs()
+                #self.aprs.send_packet("KC2BSM", 1)
 		while 1:
 			try: 
 				if not self.loop_daemon(): 
@@ -962,9 +958,8 @@ phonepatch [options]
 Daemon for the asterisk phonpeatch. It opens the radio interface 
 and spawn outgoing calls when required (via DTMF tones)"""
 	
-	default_template = "/usr/share/asterisk-phonepatch/phonepatch.conf.template"
-	default_configuration = "/etc/asterisk/phonepatch.conf"
-	
+	default_template = "aprstt.conf.template"
+	default_configuration = "aprstt.conf"
 	optpar = optparse.OptionParser(usage)
 	optpar.add_option('-q', '--quiet', dest='verbose', default = True, action='store_false', help = 'Be quiet (disable verbose mode)')
 	optpar.add_option('-f', '--configuration-file',  dest='configuration_file', type = "string", default = default_configuration, help = 'Use configuration file')

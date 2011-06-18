@@ -232,7 +232,13 @@ def get_lines_description():
 
 ###################################
 def main():
+	print("Test: ");
+	lat = "3322.99"
+	latf = float(lat) + .01
+	lats = "%4.2f" % latf
+	print(lats)
 	usage = """radio-control.py [options]
+
 
 Control radio PTT (output) and carrier-detection (input) using a serial, 
 parallel port or an external command. Default lines are (change them
