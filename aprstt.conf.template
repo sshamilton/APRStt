@@ -1,0 +1,362 @@
+; Asterisk-phonepatch: Software phonepatch for the Asterisk PBX
+
+; Sections:
+; 	[general] section for global options
+;	[phonepathN] for phonepatch definitions (N for phonepatch id)
+; 	the rest are considered phonepatch user's extensions
+
+outcall_daemon:
+	type = state
+	default = off
+	help = Enable/Disable daemon for outgoing calls for the current phonepatch
+
+soundcard_device:
+	type = string
+	default = /dev/dsp
+	help = OSS Soundcard device (/dev/dspX)
+
+soundcard_samplerate:
+	type = integer
+	default = 8000
+	help = Soundcard samplerate (now fixed to 8000)
+
+soundcard_latency:
+	type = float
+	default = 0.1
+	help = Soundcard card latency (seconds) for input/output buffers. Be aware that low values will load CPU heavily.
+
+ptt:
+	type = state
+	default = off
+	help = PTT (Push-to-Talk) state
+
+radio_control:
+	type = string
+	default = off
+	help = Select "serial:device" for Serial, "parallel:device" for Parallel or "command:command_to_execute" for external command execution
+
+command_ptt_on:
+	type = string
+	help = String sent to command to turn PTT on (only for radio_control command mode)
+
+command_ptt_off:
+	type = string
+	help = String sent to command to turn PTT off (only for radio_control command mode)
+
+command_get_carrier:
+	type = string
+	help = String sent to command to get carrier state (only for radio_control command mode)
+	
+command_get_carrier_response:
+	type = string
+	help = String read from get_carrier command to get on/off state (using parenthesis and or operator (|) to indicate them). Example: "get carrier: (on|off)" (only for radio_control command mode)
+
+carrier_polling_time:
+	type = float
+	default = 0.5
+	help = Time between carrier-state lecture
+
+carrier_detection:
+	type = string
+	default = off
+	choices = on, off, audio
+	help = modes: "off" (disabled), "on" (uses device to read carrier state from radio), "audio" (uses received audio for VOX operation).  Send audio to phone link only if detected. Also blocks PTT in half duplex mode.
+
+carrier_threshold_signal:
+	type = float
+	default = 0.1
+	help = For carrier_detection=audio, VOX threshold for received audio (0..1)
+
+language:
+	type = string
+	choices = en, es
+	default = en
+	help = ISO-639 language code (2 letters) that will be used for speech and plaging audio files 
+
+sounds_dir:
+	type = string
+	default = /usr/share/asterisk-phonepatch/sounds
+	help = Directory that contains the phonepatch audio files
+
+spool_dir:
+	type = string
+	default = /var/spool/asterisk/outgoing
+	help = Asterisk spool directory for outgoing calls
+
+ptt_threshold_signal:
+	type = float
+	default = 0.05
+	help = VOX threshold, fraction of maximum power (0..1)
+
+ptt_tail_time:
+	type = float
+	default = 1.0
+	help = Minimum time that PTT is activated after last PTT activation (seconds)
+
+ptt_max_time:
+	type = float
+	default = 30.0
+	help = Maximum time that PTT can be on (seconds)
+
+ptt_wait_time:
+	type = float
+	default = 5.0
+	help = Time to wait after a ptt_max_time timeout as reached (seconds)
+
+ptt_txdelay:
+	type = float
+	default = 0.0
+	help = Time to wait after PTT is set on before writing audio to soundcard
+
+carrier_tail_time:
+	type = float
+	default = 1.0
+	help = For carrier_detection=audio, minimum time that carrier_state will be enabled (seconds)
+
+carrier_max_time:
+	type = float
+	default = 30.0
+	help = For carrier_detection=audio, Maximum time that carrier_detection can be on (seconds)
+
+carrier_wait_time:
+	type = float
+	default = 5.0
+	help = For carrier_detection=audio, time to wait after a carrier_max_time timeout was reached (seconds)
+
+full_duplex:
+	type = state
+	default = off
+	help = In enabled, carrier_detection is not used to block PTT (which is half-duplex standard behaviour. Workis only if carrier_detection is enabled)
+
+radio_audio_gain:
+	type = float
+	default = 1.0
+	help = Gain applied to signal received from phone line and sent to radio transceiver
+
+radio_audio_limit:
+	type = float
+	default = 1.0
+	help = Limit audio power read from radio to this value (fraction of 1.0).
+
+ctcss_tx_amplitude:
+	type = float
+	default = 0.1
+	help = Amplitude (0..1.0) used for CTCSS code
+
+festival_audio_gain:
+	type = float
+	default = 1.0
+	help = Gain applied to audio speech generated with Festival
+
+telephony_audio_gain:
+	type = float
+	default = 1.0
+	help = Gain applied to signal received from radio and sent to phoneline
+
+dtmf_noisy_mode_button:
+	type = string
+	help = Microphone button used in noisy links to indicate end of number
+
+dtmf_sensibility:
+	type = float
+	default = 1.0
+	help = DTMF decoding sensibility. Use values lower than 1.0 for good links, and higher for bad ones. If not sure, leave it to default value (1.0)
+
+hangup_button:
+	type = string
+	help = Microphone DTMF button to hungup a call from radio link
+
+end_audio:
+	type = string
+	default = php_endcall.ogg
+	help = Audio to play in radio interface when a call has finished
+
+call_limit:
+	type = float
+	default = 3600.0
+	help = Maximum time of a call (seconds)
+
+incall_report_audio:
+	type = string
+	default = php_incall.ogg, @"%u"
+	help = Audio to play to radio and phone links (sound files or festival speech) when receiving a call. Use "@" prefix to play text with Festival
+
+incall_report_audio_wait:
+	type = float
+	default = 5.0
+	help = Time to wait before replaying the report_call_audio (seconds)
+
+incall_report_timeout:
+	type = float
+	default = 60.0
+	help = Timeout for incoming calls to be set as not answered (seconds)
+
+incall_report_timeout_audio:
+	type = string
+	default = php_notanswered.ogg
+	help = Audio to play (sound files or festival speech) when report_all_timeout is reached
+
+incall_answer_mode:
+	type = string
+	default = dtfm
+	choices = open, dtmf, ctcss
+	help = Select if user answers a call pressing a DTMF button or detecting the CTCSS code of that user (which opens the channel simply pressing the PTT).
+
+incall_answer_button:
+	type = string
+	default = *
+	help = Microphone DTMF button to answer an incoming call in a radio station
+
+askfortone_button:
+	type = string
+	default = *
+	help = Microphone DTMF button in radio to ask the phonepatch for the phoneline
+
+outcall_dtmf_generator:
+	type = string
+	default = 0.5, 0.2, 0.05
+	help = Parameters used in DTMF generation (tonetime, waittime, amplitude)
+	
+asterisk_inactive_audio:
+	type = string
+	default = php_asterisk_inactive.ogg
+	help = Tone audio to play warning that asterisk is not active
+
+tone_audio:
+	type = string
+	default = php_tone.ogg
+	help = Tone audio to play in radio link to indicate that phonepatch is waiting for a number
+
+tone_audio_time:
+	type = float
+	default = 3.0
+	help = Time to play tone_audio (should be short on half-duplex links) (seconds)
+
+tone_timeout:
+	type = float
+	default = 60.0
+	help = Time that the user has to make a call after has received tone (seconds)
+
+tone_timeout_audio:
+	type = string
+	default = php_timeoutcall.ogg
+	help = Audio to play when tone_timeout is reached
+
+outcall_button:
+	type = string
+	default = *
+	help = Microphone DTMF button to make a call after a number has been entered
+
+clear_button:
+	type = string
+	default = #
+	help = Microphone DTMF button to reinit dial process 
+
+ring_audio:
+	type = string
+	default = php_tone.ogg
+	help = Audio to play in radio link to indicate a outgoing call is in process
+
+ring_audio_time:
+	type = float
+	default = 1.0
+	help = Time to play ring_audio (seconds)
+
+ring_audio_wait:
+	type = float
+	default = 3.0
+	help = Time to wait before replaying ring_audio (seconds)
+
+ring_timeout_audio:
+	type = string
+	default = php_ringtimeout.ogg
+	help = Audio to play in radio when an outgoing call has not been answered
+
+outcall_channel:
+	type = string
+	default = Sip
+	help = Asterisk outgoing call channel, %x means destination extension (example: Sip/%x)
+
+outcall_context:
+	type = string
+	default = default
+	help = Asterisk outgoing call context
+
+outcall_extension:
+	type = string.
+	help = Asterisk outgoing call extension (%x will be substituted by extension's name)
+
+outcall_timeout:
+	type = integer
+	default = 60
+	help = Timeout to give up an outgoing call if not answered (seconds)
+
+outcall_priority:
+	type = integer
+	default = 1
+	help = Asterisk priority of the outgoing call
+
+outcall_askfortone_mode:
+	type = string
+	default = dtmf
+	choices = dtmf, ctcss
+	help = Mode used by the user to ask for tone: 'dtmf' (%x in outcall_extension parameter are substituted) or 'ctcss'' (use outcall_extension and append phonepatch extension using the CTCSS tone detected).
+
+outcall_check_script:
+	type = string
+	help = If defined, run script. If return value is different from 0, outcall won't start. Otherwise, continue normally.
+
+outcall_check_audio:
+	type = string
+	help = If outcall_check_script returned error, play audio to inform the user
+
+outcall_dtmf_extension_mode:
+	type = state
+	default = on
+	help = If enabled and outcall_askfortone_mode=dtmf, search a outcall_dtmf_id matching to the number prefix. If not found in any extension, the call is aborted.
+
+username:
+	type = string
+	default = default
+	help = Station name for a phonepatch extension
+
+ctcss_tx:
+	type = string
+	default = off
+	help = CTCSS (Continuous Tone-Coded Squelch System) frequency to use in tranmission. 2-digit Motorola PL codes are also understood
+
+ctcss_rx:
+	type = string
+	default = off
+	help = CTCSS (Continuous Tone-Coded Squelch System) frequency to use in station identification (reception). 2-digit Motorola PL codes are also understood
+
+outcall:
+	type = state
+	default = on
+	help = Enable/disable outgoing calls for a phonepatch extension
+
+incall:
+	type = state
+	default = on
+	help = Enable/disable incoming calls for a phonepatch extension
+
+phonepatch:
+	type = string
+	help = Phonepatch to use in a phonepatch extension
+
+callerid:
+	type = string
+	help = Set a CallerID for a station. If not given, use 'name <extension>' by default
+
+outcall_ctcss_autocall:
+	type = string
+	help = If CTCSS tone is detected, an automatic outgoing call is made. Useful for emergency puposes with users without DTMF or limited outcalls.
+
+outcall_dtmf_id:
+	type = string
+	help = If outcall_dtmf_extension_mode is enabled, the number prefix is searched along all user's extension to match this id. %x is replaced by the extension section's name.
+
+ctcss_decoder_mintime:
+	type = float
+	default = 0.0
+	help = Minimum threshold time to decode a CTCSS tone.

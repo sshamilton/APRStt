@@ -20,7 +20,8 @@
 
 # Standard Python modules
 import sys, os, optparse, tempfile
-import time, select, popen2, re
+import popen2, time, select, re
+
 import signal, inspect, grp
 import syslog, errno, pwd
 import threading, audioop
